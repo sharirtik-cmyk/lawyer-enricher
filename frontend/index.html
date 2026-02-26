@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Legal Scout — מערכת סיווג עורכי דין</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0c14;
+    --surface: #111420;
+    --surface2: #1a1e2e;
+    --border: #252a3d;
+    --accent: #4f6ef7;
+    --accent2: #7c3aed;
+    --green: #10b981;
+    --red: #ef4444;
+    --yellow: #f59e0b;
+    --text: #e8eaf6;
+    --muted: #6b7280;
+    --mono: 'Space Mono', monospace;
+    --sans: 'Heebo', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    direction: rtl;
+  }
+  /* Animated background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: 
+      radial-gradient(ellipse 60% 50% at 20% 20%, rgba(79,110,247,0.08) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 60% at 80% 80%, rgba(124,58,237,0.06) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Layout ── */
+  .app { position: relative; z-index: 1; }
+  
+  header {
+    padding: 20px 40px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(17,20,32,0.8);
+    backdrop-filter: blur(20px);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .logo-icon {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  .logo-text {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+  }
+  .logo-text span { color: var(--accent); }
+  
+  nav { display: flex; gap: 4px; }
+  .nav-btn {
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 500;
+    transition: all .2s;
+  }
+  .nav-btn:hover, .nav-btn.active {
+    background: var(--surface2);
+    color: var(--text);
+  }
+  .nav-btn.active { color: var(--accent); }
+
+  main { padding: 40px; max-width: 1400px; margin: 0 auto; }
+
+  /* ── Pages ── */
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px;
+  }
+  .card-title {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 20px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* ── Upload Zone ── */
+  .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
+
+  .drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: 16px;
+    padding: 60px 40px;
+    text-align: center;
+    cursor: pointer;
+    transition: all .3s;
+    background: var(--surface);
+    position: relative;
+    overflow: hidden;
+  }
+  .drop-zone::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(79,110,247,0.05), rgba(124,58,237,0.05));
+    opacity: 0;
+    transition: opacity .3s;
+  }
+  .drop-zone:hover, .drop-zone.dragging {
+    border-color: var(--accent);
+    background: rgba(79,110,247,0.05);
+  }
+  .drop-zone:hover::before, .drop-zone.dragging::before { opacity: 1; }
+  .drop-icon { font-size: 48px; margin-bottom: 12px; }
+  .drop-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+  .drop-sub { font-size: 13px; color: var(--muted); }
+  .drop-filename { 
+    margin-top: 12px;
+    font-size: 13px;
+    color: var(--accent);
+    font-family: var(--mono);
+    background: rgba(79,110,247,0.1);
+    padding: 4px 12px;
+    border-radius: 6px;
+    display: inline-block;
+  }
+  #file-input { display: none; }
+
+  /* ── Config Panel ── */
+  .config-section { margin-bottom: 20px; }
+  .config-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tag-input-wrap {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-height: 48px;
+    cursor: text;
+    transition: border-color .2s;
+  }
+  .tag-input-wrap:focus-within { border-color: var(--accent); }
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    animation: pop .2s ease;
+  }
+  @keyframes pop { from { transform: scale(0.7); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .tag.yes { background: rgba(16,185,129,0.15); color: var(--green); border: 1px solid rgba(16,185,129,0.3); }
+  .tag.no { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
+  .tag-remove { cursor: pointer; opacity: 0.6; transition: opacity .2s; font-size: 14px; }
+  .tag-remove:hover { opacity: 1; }
+  .tag-text-input {
+    background: none;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    min-width: 100px;
+    flex: 1;
+    direction: rtl;
+  }
+
+  /* ── Buttons ── */
+  .btn {
+    padding: 12px 24px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 600;
+    transition: all .2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: white;
+    box-shadow: 0 4px 20px rgba(79,110,247,0.3);
+  }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(79,110,247,0.4); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .btn-ghost {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-success {
+    background: rgba(16,185,129,0.15);
+    color: var(--green);
+    border: 1px solid rgba(16,185,129,0.3);
+  }
+  .btn-success:hover { background: rgba(16,185,129,0.25); }
+
+  /* ── Jobs List ── */
+  .jobs-grid { display: flex; flex-direction: column; gap: 12px; }
+  .job-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .job-card:hover { border-color: var(--accent); background: rgba(79,110,247,0.04); }
+  .job-status-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .job-status-dot.running { background: var(--yellow); animation: pulse 1.5s infinite; }
+  .job-status-dot.completed { background: var(--green); }
+  .job-status-dot.pending { background: var(--muted); }
+  .job-status-dot.error { background: var(--red); }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .job-name { font-weight: 600; flex: 1; }
+  .job-meta { font-size: 12px; color: var(--muted); display: flex; gap: 16px; }
+  .progress-bar-wrap {
+    background: var(--border);
+    border-radius: 4px;
+    height: 4px;
+    width: 120px;
+    overflow: hidden;
+  }
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 4px;
+    transition: width .5s;
+  }
+
+  /* ── Results Table ── */
+  .results-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .filters { display: flex; gap: 10px; flex-wrap: wrap; }
+  .filter-btn {
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 13px;
+    font-family: var(--sans);
+    transition: all .2s;
+  }
+  .filter-btn.active-yes { background: rgba(16,185,129,0.15); color: var(--green); border-color: rgba(16,185,129,0.4); }
+  .filter-btn.active-no { background: rgba(239,68,68,0.15); color: var(--red); border-color: rgba(239,68,68,0.4); }
+  .filter-btn.active-maybe { background: rgba(245,158,11,0.15); color: var(--yellow); border-color: rgba(245,158,11,0.4); }
+  .filter-btn.active-all { background: var(--accent); color: white; border-color: var(--accent); }
+
+  .search-input {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 14px;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    width: 220px;
+    transition: border-color .2s;
+    direction: rtl;
+  }
+  .search-input:focus { outline: none; border-color: var(--accent); }
+
+  .table-wrap {
+    overflow-x: auto;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th {
+    background: var(--surface2);
+    padding: 12px 16px;
+    text-align: right;
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(37,42,61,0.5);
+    vertical-align: top;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(79,110,247,0.03); }
+  
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .badge-yes { background: rgba(16,185,129,0.15); color: var(--green); }
+  .badge-no { background: rgba(239,68,68,0.15); color: var(--red); }
+  .badge-maybe { background: rgba(245,158,11,0.15); color: var(--yellow); }
+  .badge-pending { background: rgba(107,114,128,0.2); color: var(--muted); }
+
+  .area-chips { display: flex; flex-wrap: wrap; gap: 4px; max-width: 200px; }
+  .area-chip {
+    background: rgba(79,110,247,0.12);
+    color: #a5b4fc;
+    border-radius: 4px;
+    padding: 2px 7px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .site-link {
+    color: var(--accent);
+    text-decoration: none;
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  .site-link:hover { text-decoration: underline; }
+
+  .conf-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .conf-fill {
+    height: 4px;
+    border-radius: 2px;
+    width: 60px;
+    background: var(--border);
+    overflow: hidden;
+  }
+  .conf-fill-inner {
+    height: 100%;
+    border-radius: 2px;
+  }
+
+  /* ── Pagination ── */
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 20px;
+  }
+  .page-btn {
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    cursor: pointer;
+    font-family: var(--sans);
+    font-size: 13px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all .2s;
+  }
+  .page-btn:hover { border-color: var(--accent); }
+  .page-btn.current { background: var(--accent); color: white; border-color: var(--accent); }
+  .page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  /* ── Progress Detail ── */
+  .job-detail-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+  .big-progress {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 20px;
+  }
+  .big-progress-bar-wrap {
+    background: var(--border);
+    border-radius: 8px;
+    height: 12px;
+    overflow: hidden;
+    margin-top: 12px;
+  }
+  .big-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 8px;
+    transition: width 1s;
+  }
+  .stats-row {
+    display: flex;
+    gap: 16px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+  .stat-box {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 20px;
+    flex: 1;
+    min-width: 100px;
+    text-align: center;
+  }
+  .stat-num {
+    font-size: 28px;
+    font-weight: 800;
+    font-family: var(--mono);
+  }
+  .stat-label { font-size: 11px; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 24px;
+    font-size: 14px;
+    opacity: 0;
+    transition: all .3s;
+    z-index: 999;
+    pointer-events: none;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* Empty state */
+  .empty {
+    text-align: center;
+    padding: 60px;
+    color: var(--muted);
+  }
+  .empty-icon { font-size: 48px; margin-bottom: 12px; }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    main { padding: 20px; }
+    .upload-grid { grid-template-columns: 1fr; }
+    header { padding: 16px 20px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo">
+      <div class="logo-icon">⚖️</div>
+      <div class="logo-text">Legal<span>Scout</span></div>
+    </div>
+    <nav>
+      <button class="nav-btn active" onclick="showPage('upload')">העלאה</button>
+      <button class="nav-btn" onclick="showPage('jobs')">משימות</button>
+      <button class="nav-btn" id="results-nav" onclick="showPage('results')" style="display:none">תוצאות</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- ── Upload Page ── -->
+    <div class="page active" id="page-upload">
+      <div class="upload-grid">
+        <!-- Drop Zone -->
+        <div>
+          <div class="card-title">📁 קובץ Excel</div>
+          <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+            <div class="drop-icon">📊</div>
+            <div class="drop-title">גרור קובץ Excel לכאן</div>
+            <div class="drop-sub">או לחץ לבחירת קובץ</div>
+            <div class="drop-filename" id="file-label" style="display:none"></div>
+          </div>
+          <input type="file" id="file-input" accept=".xlsx,.xls" onchange="handleFileSelect(this)">
+        </div>
+
+        <!-- Config -->
+        <div class="card">
+          <div class="card-title">⚙️ כללים עסקיים</div>
+
+          <div class="config-section">
+            <div class="config-label">
+              <span style="color:var(--green)">✓</span> תחומים מועדפים (YES)
+              <span style="font-size:11px; font-weight:400; text-transform:none">(Enter להוסיף)</span>
+            </div>
+            <div class="tag-input-wrap" onclick="this.querySelector('input').focus()">
+              <div id="yes-tags"></div>
+              <input class="tag-text-input" id="yes-input" placeholder="נדל״ן, מקרקעין..." 
+                     onkeydown="handleTagInput(event,'yes')">
+            </div>
+          </div>
+
+          <div class="config-section">
+            <div class="config-label">
+              <span style="color:var(--red)">✗</span> תחומים לא רלוונטיים (NO)
+            </div>
+            <div class="tag-input-wrap" onclick="this.querySelector('input').focus()">
+              <div id="no-tags"></div>
+              <input class="tag-text-input" id="no-input" placeholder="פלילי, תעבורה..."
+                     onkeydown="handleTagInput(event,'no')">
+            </div>
+          </div>
+
+          <div style="margin-top: 8px; font-size: 12px; color: var(--muted); line-height: 1.6;">
+            💡 הערה: עמודת "קטגוריה עסקית" תועתק לפלט אך <strong>לא תשמש לסיווג</strong>.
+            הסיווג מבוסס אך ורק על תוכן האתר.
+          </div>
+        </div>
+      </div>
+
+      <div style="text-align:center; margin-top: 8px;">
+        <button class="btn btn-primary" id="start-btn" onclick="startJob()" disabled>
+          🚀 התחל עיבוד
+        </button>
+      </div>
+    </div>
+
+    <!-- ── Jobs Page ── -->
+    <div class="page" id="page-jobs">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
+        <h2 style="font-size:22px; font-weight:800;">משימות עיבוד</h2>
+        <button class="btn btn-ghost" onclick="loadJobs()">↻ רענן</button>
+      </div>
+      <div class="jobs-grid" id="jobs-list">
+        <div class="empty"><div class="empty-icon">📋</div><div>אין משימות עדיין</div></div>
+      </div>
+    </div>
+
+    <!-- ── Results Page ── -->
+    <div class="page" id="page-results">
+      <div class="job-detail-header">
+        <button class="btn btn-ghost" onclick="showPage('jobs')">← חזרה</button>
+        <h2 style="font-size:20px; font-weight:800; flex:1" id="results-title">תוצאות</h2>
+        <button class="btn btn-success" id="export-btn" onclick="exportExcel()">📥 ייצוא Excel</button>
+      </div>
+
+      <!-- Progress -->
+      <div class="big-progress" id="progress-section">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <span id="progress-label" style="font-weight:600">מעבד...</span>
+          <span id="progress-pct" style="font-family:var(--mono); color:var(--accent); font-size:18px; font-weight:700">0%</span>
+        </div>
+        <div class="big-progress-bar-wrap">
+          <div class="big-progress-bar" id="main-progress-bar" style="width:0%"></div>
+        </div>
+      </div>
+
+      <div class="stats-row" id="stats-row"></div>
+
+      <!-- Filters & Search -->
+      <div class="results-header" style="margin-top:24px;">
+        <div class="filters">
+          <button class="filter-btn active-all" onclick="setFilter('')">הכל</button>
+          <button class="filter-btn" onclick="setFilter('YES')">✓ YES</button>
+          <button class="filter-btn" onclick="setFilter('NO')">✗ NO</button>
+          <button class="filter-btn" onclick="setFilter('MAYBE')">? MAYBE</button>
+        </div>
+        <input type="text" class="search-input" id="search-input" placeholder="🔍 חיפוש..." oninput="debounceSearch()">
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>שם בית עסק</th>
+              <th>ישוב</th>
+              <th>אתר</th>
+              <th>תחומים ראשיים</th>
+              <th>ביטחון</th>
+              <th>המלצה</th>
+              <th>סיבה</th>
+              <th>סטטוס</th>
+            </tr>
+          </thead>
+          <tbody id="results-tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="pagination" id="pagination"></div>
+    </div>
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = '';  // same origin
+let currentFile = null;
+let yesTags = [], noTags = [];
+let currentJobId = null;
+let currentFilter = '';
+let currentPage = 1;
+let searchTimeout = null;
+let pollInterval = null;
+
+// ── Page Navigation ──
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  const map = { upload: 0, jobs: 1, results: 2 };
+  document.querySelectorAll('.nav-btn')[map[name]]?.classList.add('active');
+  if (name === 'jobs') loadJobs();
+}
+
+// ── Toast ──
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ── File Handling ──
+const dropZone = document.getElementById('drop-zone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragging'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragging'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragging');
+  const file = e.dataTransfer.files[0];
+  if (file) setFile(file);
+});
+
+function handleFileSelect(input) {
+  if (input.files[0]) setFile(input.files[0]);
+}
+
+function setFile(file) {
+  currentFile = file;
+  const label = document.getElementById('file-label');
+  label.textContent = file.name;
+  label.style.display = 'inline-block';
+  document.getElementById('start-btn').disabled = false;
+  toast('קובץ נבחר: ' + file.name);
+}
+
+// ── Tag Input ──
+function handleTagInput(e, type) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const input = document.getElementById(type + '-input');
+    const val = input.value.trim();
+    if (val) {
+      addTag(type, val);
+      input.value = '';
+    }
+  }
+  if (e.key === 'Backspace' && !e.target.value) {
+    const arr = type === 'yes' ? yesTags : noTags;
+    if (arr.length > 0) {
+      arr.pop();
+      renderTags(type);
+    }
+  }
+}
+
+function addTag(type, value) {
+  const arr = type === 'yes' ? yesTags : noTags;
+  if (!arr.includes(value)) {
+    arr.push(value);
+    renderTags(type);
+  }
+}
+
+function removeTag(type, value) {
+  if (type === 'yes') yesTags = yesTags.filter(t => t !== value);
+  else noTags = noTags.filter(t => t !== value);
+  renderTags(type);
+}
+
+function renderTags(type) {
+  const arr = type === 'yes' ? yesTags : noTags;
+  const container = document.getElementById(type + '-tags');
+  container.innerHTML = arr.map(v =>
+    `<span class="tag ${type}">
+      ${v}
+      <span class="tag-remove" onclick="removeTag('${type}','${v}')">×</span>
+    </span>`
+  ).join('');
+}
+
+// ── Start Job ──
+async function startJob() {
+  if (!currentFile) return toast('אנא בחר קובץ Excel');
+
+  const config = {
+    target_areas: yesTags,
+    excluded_areas: noTags
+  };
+
+  const fd = new FormData();
+  fd.append('file', currentFile);
+  fd.append('config', JSON.stringify(config));
+
+  const btn = document.getElementById('start-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ שולח...';
+
+  try {
+    const res = await fetch('/api/upload', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (data.job_id) {
+      toast(`✓ משימה נוצרה — ${data.total_rows} שורות`);
+      openJobResults(data.job_id);
+    } else {
+      toast('שגיאה: ' + JSON.stringify(data));
+    }
+  } catch(e) {
+    toast('שגיאת חיבור: ' + e.message);
+  }
+  btn.disabled = false;
+  btn.innerHTML = '🚀 התחל עיבוד';
+}
+
+// ── Jobs List ──
+async function loadJobs() {
+  const res = await fetch('/api/jobs');
+  const jobs = await res.json();
+  const container = document.getElementById('jobs-list');
+  
+  if (!jobs.length) {
+    container.innerHTML = '<div class="empty"><div class="empty-icon">📋</div><div>אין משימות עדיין</div></div>';
+    return;
+  }
+
+  container.innerHTML = jobs.map(j => {
+    const pct = j.total_rows ? Math.round(j.processed_rows / j.total_rows * 100) : 0;
+    const date = new Date(j.created_at).toLocaleString('he-IL');
+    return `
+      <div class="job-card" onclick="openJobResults(${j.id})">
+        <div class="job-status-dot ${j.status}"></div>
+        <div>
+          <div class="job-name">${j.filename}</div>
+          <div class="job-meta">
+            <span>${date}</span>
+            <span>${j.processed_rows} / ${j.total_rows} שורות</span>
+            <span>${statusLabel(j.status)}</span>
+          </div>
+        </div>
+        <div style="margin-right:auto">
+          <div class="progress-bar-wrap">
+            <div class="progress-bar" style="width:${pct}%"></div>
+          </div>
+          <div style="font-size:11px; color:var(--muted); text-align:center; margin-top:4px">${pct}%</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function statusLabel(s) {
+  const m = { running: '⚡ מעבד', completed: '✓ הושלם', pending: '⏳ ממתין', error: '✗ שגיאה' };
+  return m[s] || s;
+}
+
+// ── Results ──
+async function openJobResults(jobId) {
+  currentJobId = jobId;
+  currentPage = 1;
+  currentFilter = '';
+  document.getElementById('results-nav').style.display = '';
+  showPage('results');
+  
+  // Reset filter buttons
+  document.querySelectorAll('.filter-btn').forEach(b => {
+    b.className = 'filter-btn';
+  });
+  document.querySelectorAll('.filter-btn')[0].className = 'filter-btn active-all';
+
+  await refreshResults();
+  startPolling();
+}
+
+function startPolling() {
+  if (pollInterval) clearInterval(pollInterval);
+  pollInterval = setInterval(async () => {
+    const job = await (await fetch(`/api/jobs/${currentJobId}`)).json();
+    updateProgress(job);
+    if (job.status === 'completed') {
+      clearInterval(pollInterval);
+      pollInterval = null;
+      await loadResultsTable();
+    } else {
+      await loadResultsTable();
+    }
+  }, 3000);
+}
+
+async function refreshResults() {
+  const job = await (await fetch(`/api/jobs/${currentJobId}`)).json();
+  document.getElementById('results-title').textContent = `תוצאות: ${job.filename}`;
+  updateProgress(job);
+  await loadResultsTable();
+}
+
+function updateProgress(job) {
+  const pct = job.total_rows ? Math.round(job.processed_rows / job.total_rows * 100) : 0;
+  document.getElementById('progress-pct').textContent = pct + '%';
+  document.getElementById('main-progress-bar').style.width = pct + '%';
+  const labels = { running: `מעבד ${job.processed_rows} / ${job.total_rows}`, completed: '✓ עיבוד הושלם', pending: 'ממתין...' };
+  document.getElementById('progress-label').textContent = labels[job.status] || job.status;
+  if (job.status === 'completed') {
+    document.getElementById('progress-section').style.borderColor = 'rgba(16,185,129,0.3)';
+  }
+}
+
+async function loadResultsTable() {
+  const search = document.getElementById('search-input').value;
+  const params = new URLSearchParams({
+    page: currentPage,
+    per_page: 20,
+    recommendation: currentFilter,
+    search
+  });
+  const data = await (await fetch(`/api/jobs/${currentJobId}/rows?${params}`)).json();
+  
+  renderStats(data);
+  renderTable(data.rows);
+  renderPagination(data.total, data.page, data.per_page);
+}
+
+function renderStats(data) {
+  // We'd need counts per recommendation — compute from rows for now
+  const rows = data.rows;
+  const total = data.total;
+  document.getElementById('stats-row').innerHTML = `
+    <div class="stat-box"><div class="stat-num" style="color:var(--text)">${total}</div><div class="stat-label">סה"כ</div></div>
+  `;
+}
+
+function renderTable(rows) {
+  const tbody = document.getElementById('results-tbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:40px; color:var(--muted)">אין תוצאות</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r => {
+    const raw = r.raw_data || {};
+    const name = raw['שם בית העסק'] || '—';
+    const city = raw['ישוב'] || '—';
+    const site = r.site_final;
+    const areas = [r.primary_area_1, r.primary_area_2, r.primary_area_3].filter(Boolean);
+    const conf = r.confidence || 0;
+    const rec = r.recommendation;
+    const confColor = conf >= 70 ? 'var(--green)' : conf >= 40 ? 'var(--yellow)' : 'var(--red)';
+
+    let statusBadge;
+    if (r.status === 'pending') statusBadge = '<span class="badge badge-pending">ממתין</span>';
+    else if (r.status === 'error') statusBadge = '<span class="badge badge-no">שגיאה</span>';
+    else statusBadge = '<span class="badge" style="background:rgba(16,185,129,0.1);color:var(--green)">✓</span>';
+
+    return `
+      <tr>
+        <td title="${name}" style="font-weight:600; max-width:160px">${name}</td>
+        <td style="color:var(--muted)">${city}</td>
+        <td>${site ? `<a class="site-link" href="${site}" target="_blank" title="${site}">${new URL(site).hostname.replace('www.','')}</a>` : '<span style="color:var(--muted)">—</span>'}</td>
+        <td>
+          <div class="area-chips">
+            ${areas.map(a => `<span class="area-chip">${a}</span>`).join('')}
+            ${!areas.length ? '<span style="color:var(--muted)">—</span>' : ''}
+          </div>
+        </td>
+        <td>
+          <div class="conf-bar">
+            <div class="conf-fill"><div class="conf-fill-inner" style="width:${conf}%;background:${confColor}"></div></div>
+            <span style="color:${confColor}; font-size:12px; font-family:var(--mono)">${conf}%</span>
+          </div>
+        </td>
+        <td>${rec ? `<span class="badge badge-${rec.toLowerCase()}">${rec}</span>` : statusBadge}</td>
+        <td style="color:var(--muted); font-size:12px; max-width:180px; white-space:normal; line-height:1.4">${r.recommendation_reason || '—'}</td>
+        <td>${r.site_status ? `<span style="font-size:11px; color:var(--muted); font-family:var(--mono)">${r.site_status}</span>` : statusBadge}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function renderPagination(total, page, perPage) {
+  const pages = Math.ceil(total / perPage);
+  const container = document.getElementById('pagination');
+  if (pages <= 1) { container.innerHTML = ''; return; }
+  
+  let html = `<button class="page-btn" onclick="goPage(${page-1})" ${page<=1?'disabled':''}>›</button>`;
+  const start = Math.max(1, page - 2), end = Math.min(pages, page + 2);
+  if (start > 1) html += `<button class="page-btn" onclick="goPage(1)">1</button><span style="color:var(--muted)">…</span>`;
+  for (let i = start; i <= end; i++) {
+    html += `<button class="page-btn ${i===page?'current':''}" onclick="goPage(${i})">${i}</button>`;
+  }
+  if (end < pages) html += `<span style="color:var(--muted)">…</span><button class="page-btn" onclick="goPage(${pages})">${pages}</button>`;
+  html += `<button class="page-btn" onclick="goPage(${page+1})" ${page>=pages?'disabled':''}>‹</button>`;
+  container.innerHTML = html;
+}
+
+function goPage(p) { currentPage = p; loadResultsTable(); }
+
+function setFilter(rec) {
+  currentFilter = rec;
+  currentPage = 1;
+  document.querySelectorAll('.filter-btn').forEach(b => {
+    b.className = 'filter-btn';
+  });
+  const map = { '': 0, YES: 1, NO: 2, MAYBE: 3 };
+  const btn = document.querySelectorAll('.filter-btn')[map[rec]];
+  if (btn) btn.className = 'filter-btn active-' + (rec.toLowerCase() || 'all');
+  loadResultsTable();
+}
+
+function debounceSearch() {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => { currentPage = 1; loadResultsTable(); }, 400);
+}
+
+async function exportExcel() {
+  window.open(`/api/jobs/${currentJobId}/export`, '_blank');
+}
+</script>
+</body>
+</html>
