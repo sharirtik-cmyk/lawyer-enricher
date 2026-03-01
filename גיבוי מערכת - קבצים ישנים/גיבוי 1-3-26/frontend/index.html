@@ -497,37 +497,6 @@
   }
   #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-  /* ── Mode selector ── */
-  .mode-card {
-    border: 2px solid var(--border);
-    border-radius: 12px;
-    padding: 16px 10px;
-    text-align: center;
-    cursor: pointer;
-    transition: all .2s;
-    background: var(--surface2);
-  }
-  .mode-card:hover { border-color: var(--accent); }
-  .mode-card.active {
-    border-color: var(--accent);
-    background: rgba(79,110,247,0.1);
-  }
-  .mode-card.full-mode.active {
-    border-color: var(--accent2);
-    background: rgba(124,58,237,0.1);
-  }
-  .mode-icon { font-size: 24px; margin-bottom: 6px; }
-  .mode-title { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
-  .mode-sub { font-size: 11px; color: var(--muted); line-height: 1.4; }
-
-  /* ── Resume button ── */
-  .btn-resume {
-    background: rgba(245,158,11,0.15);
-    color: var(--yellow);
-    border: 1px solid rgba(245,158,11,0.3);
-  }
-  .btn-resume:hover { background: rgba(245,158,11,0.25); }
-
   /* Empty state */
   .empty {
     text-align: center;
@@ -608,40 +577,6 @@
         </div>
       </div>
 
-      <!-- Run mode selector -->
-      <div class="card" style="margin-bottom: 20px;">
-        <div class="card-title">🎛️ מצב ריצה</div>
-        <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:16px;">
-          <label class="mode-card active" data-mode="sample_10">
-            <input type="radio" name="run_mode" value="sample_10" checked style="display:none">
-            <div class="mode-icon">🧪</div>
-            <div class="mode-title">Test</div>
-            <div class="mode-sub">10 רשומות<br>עם אתר</div>
-          </label>
-          <label class="mode-card" data-mode="sample_50">
-            <input type="radio" name="run_mode" value="sample_50" style="display:none">
-            <div class="mode-icon">🔍</div>
-            <div class="mode-title">Sample</div>
-            <div class="mode-sub">50 רשומות<br>עם אתר</div>
-          </label>
-          <label class="mode-card" data-mode="sample_100">
-            <input type="radio" name="run_mode" value="sample_100" style="display:none">
-            <div class="mode-icon">📋</div>
-            <div class="mode-title">Mini</div>
-            <div class="mode-sub">100 רשומות<br>עם אתר</div>
-          </label>
-          <label class="mode-card" data-mode="full">
-            <input type="radio" name="run_mode" value="full" style="display:none">
-            <div class="mode-icon">🚀</div>
-            <div class="mode-title">Full</div>
-            <div class="mode-sub">כל הקובץ<br>כולל חיפוש</div>
-          </label>
-        </div>
-        <div id="mode-note" style="font-size:12px; color:var(--muted); line-height:1.6; padding: 10px 14px; background:var(--surface2); border-radius:8px;">
-          🧪 <strong>Test:</strong> מריץ 10 רשומות שיש להן אתר בקובץ — מהיר וזול לבדיקת תקינות
-        </div>
-      </div>
-
       <div style="text-align:center; margin-top: 8px;">
         <button class="btn btn-primary" id="start-btn" onclick="startJob()" disabled>
           🚀 התחל עיבוד
@@ -665,7 +600,6 @@
       <div class="job-detail-header">
         <button class="btn btn-ghost" onclick="showPage('jobs')">← חזרה</button>
         <h2 style="font-size:20px; font-weight:800; flex:1" id="results-title">תוצאות</h2>
-        <button class="btn btn-resume" id="resume-btn" onclick="resumeJob()" style="display:none">↺ המשך עיבוד</button>
         <button class="btn btn-success" id="export-btn" onclick="exportExcel()">📥 ייצוא Excel</button>
       </div>
 
@@ -719,7 +653,7 @@
 <div id="toast"></div>
 
 <script>
-const API = '';
+const API = '';  // same origin
 let currentFile = null;
 let yesTags = [], noTags = [];
 let currentJobId = null;
@@ -727,30 +661,6 @@ let currentFilter = '';
 let currentPage = 1;
 let searchTimeout = null;
 let pollInterval = null;
-
-const MODE_NOTES = {
-  sample_10:  '🧪 <strong>Test:</strong> מריץ 10 רשומות שיש להן אתר בקובץ — מהיר וזול לבדיקת תקינות',
-  sample_50:  '🔍 <strong>Sample:</strong> מריץ 50 רשומות שיש להן אתר בקובץ — בדיקה רצינית לפני Full',
-  sample_100: '📋 <strong>Mini:</strong> מריץ 100 רשומות שיש להן אתר בקובץ — בדיקה מקיפה',
-  full:       '🚀 <strong>Full:</strong> מריץ את כל הקובץ — כולל חיפוש אתר ברשת לכאלה שאין להם. זה עשוי לקחת זמן.',
-};
-
-// Mode card interactivity
-document.querySelectorAll('.mode-card').forEach(card => {
-  card.addEventListener('click', () => {
-    document.querySelectorAll('.mode-card').forEach(c => c.classList.remove('active'));
-    card.classList.add('active');
-    card.querySelector('input').checked = true;
-    const mode = card.dataset.mode;
-    if (mode === 'full') card.classList.add('full-mode');
-    document.getElementById('mode-note').innerHTML = MODE_NOTES[mode] || '';
-  });
-});
-
-function getSelectedMode() {
-  const checked = document.querySelector('input[name="run_mode"]:checked');
-  return checked ? checked.value : 'full';
-}
 
 // ── Page Navigation ──
 function showPage(name) {
@@ -843,24 +753,24 @@ function renderTags(type) {
 async function startJob() {
   if (!currentFile) return toast('אנא בחר קובץ Excel');
 
-  const config = { target_areas: yesTags, excluded_areas: noTags };
-  const mode   = getSelectedMode();
+  const config = {
+    target_areas: yesTags,
+    excluded_areas: noTags
+  };
 
   const fd = new FormData();
   fd.append('file', currentFile);
   fd.append('config', JSON.stringify(config));
-  fd.append('mode', mode);
 
   const btn = document.getElementById('start-btn');
   btn.disabled = true;
   btn.textContent = '⏳ שולח...';
 
   try {
-    const res  = await fetch('/api/upload', { method: 'POST', body: fd });
+    const res = await fetch('/api/upload', { method: 'POST', body: fd });
     const data = await res.json();
     if (data.job_id) {
-      const skipped = data.skipped_rows ? ` (${data.skipped_rows} מדולגות)` : '';
-      toast(`✓ משימה נוצרה — ${data.total_rows} שורות לעיבוד${skipped}`);
+      toast(`✓ משימה נוצרה — ${data.total_rows} שורות`);
       openJobResults(data.job_id);
     } else {
       toast('שגיאה: ' + JSON.stringify(data));
@@ -936,10 +846,12 @@ function startPolling() {
   pollInterval = setInterval(async () => {
     const job = await (await fetch(`/api/jobs/${currentJobId}`)).json();
     updateProgress(job);
-    await loadResultsTable();
-    if (job.status === 'completed' || job.status === 'error') {
+    if (job.status === 'completed') {
       clearInterval(pollInterval);
       pollInterval = null;
+      await loadResultsTable();
+    } else {
+      await loadResultsTable();
     }
   }, 3000);
 }
@@ -951,52 +863,15 @@ async function refreshResults() {
   await loadResultsTable();
 }
 
-async function resumeJob() {
-  if (!currentJobId) return;
-  const res  = await fetch(`/api/jobs/${currentJobId}/resume`, { method: 'POST' });
-  const data = await res.json();
-  if (data.ok) {
-    toast(`↺ ממשיך עיבוד — ${data.resuming_rows} שורות ממתינות`);
-    document.getElementById('resume-btn').style.display = 'none';
-    startPolling();
-  }
-}
-
 function updateProgress(job) {
   const pct = job.total_rows ? Math.round(job.processed_rows / job.total_rows * 100) : 0;
   document.getElementById('progress-pct').textContent = pct + '%';
   document.getElementById('main-progress-bar').style.width = pct + '%';
-
-  const modeLabel = { full:'Full', sample_10:'Test·10', sample_50:'Sample·50', sample_100:'Mini·100' };
-  const labels = {
-    running:   `⚡ מעבד ${job.processed_rows} / ${job.total_rows} [${modeLabel[job.mode]||''}]`,
-    completed: `✓ עיבוד הושלם`,
-    error:     `✗ שגיאה — עיבוד נכשל`,
-    pending:   'ממתין להתחלה...'
-  };
+  const labels = { running: `מעבד ${job.processed_rows} / ${job.total_rows}`, completed: '✓ עיבוד הושלם', pending: 'ממתין...' };
   document.getElementById('progress-label').textContent = labels[job.status] || job.status;
-
-  const resumeBtn = document.getElementById('resume-btn');
   if (job.status === 'completed') {
     document.getElementById('progress-section').style.borderColor = 'rgba(16,185,129,0.3)';
-    resumeBtn.style.display = 'none';
-    if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
-  } else if (job.status === 'error') {
-    document.getElementById('progress-section').style.borderColor = 'rgba(239,68,68,0.3)';
-    resumeBtn.style.display = '';  // show resume button on error
-  } else {
-    resumeBtn.style.display = 'none';
   }
-
-  // Update stats row
-  const statsHtml = `
-    <div class="stat-box"><div class="stat-num" style="color:var(--green)">${job.yes_count||0}</div><div class="stat-label">YES</div></div>
-    <div class="stat-box"><div class="stat-num" style="color:var(--red)">${job.no_count||0}</div><div class="stat-label">NO</div></div>
-    <div class="stat-box"><div class="stat-num" style="color:var(--yellow)">${job.maybe_count||0}</div><div class="stat-label">MAYBE</div></div>
-    <div class="stat-box"><div class="stat-num" style="color:var(--muted)">${job.error_count||0}</div><div class="stat-label">שגיאות</div></div>
-    <div class="stat-box"><div class="stat-num" style="color:var(--text)">${job.total_rows||0}</div><div class="stat-label">סה"כ</div></div>
-  `;
-  document.getElementById('stats-row').innerHTML = statsHtml;
 }
 
 async function loadResultsTable() {
@@ -1015,7 +890,12 @@ async function loadResultsTable() {
 }
 
 function renderStats(data) {
-  // Stats are now rendered by updateProgress() using job-level counts
+  // We'd need counts per recommendation — compute from rows for now
+  const rows = data.rows;
+  const total = data.total;
+  document.getElementById('stats-row').innerHTML = `
+    <div class="stat-box"><div class="stat-num" style="color:var(--text)">${total}</div><div class="stat-label">סה"כ</div></div>
+  `;
 }
 
 function renderTable(rows) {
