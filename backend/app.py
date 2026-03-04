@@ -416,12 +416,28 @@ Rules:
             max_tokens=800,
             messages=[{"role": "user", "content": prompt}]
         )
-        text  = response.content[0].text
-        match = re.search(r'\{.*\}', text, re.DOTALL)
-        if match:
-            result = json.loads(match.group())
+        text = response.content[0].text
+        # Find the outermost JSON object robustly
+        start = text.find('{')
+        if start == -1:
+            return None
+        depth = 0
+        end = -1
+        for i, ch in enumerate(text[start:], start):
+            if ch == '{': depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        if end == -1:
+            return None
+        try:
+            result = json.loads(text[start:end])
             if result.get('primary_practice_areas'):
                 return result
+        except (json.JSONDecodeError, TypeError):
+            pass
         return None
 
     return claude_with_retry(_call)
