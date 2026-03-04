@@ -246,10 +246,23 @@ def web_search_for_site(lawyer_name, city):
                 f"Return ONLY the URL, nothing else."}]
         )
         for block in response.content:
-            if hasattr(block, 'text'):
-                for url in re.findall(r'https?://[^\s\'"<>]+', block.text):
+            text = None
+            if hasattr(block, 'text') and block.text:
+                text = block.text
+            elif hasattr(block, 'content'):
+                # tool_result block
+                inner = block.content
+                if isinstance(inner, list):
+                    for item in inner:
+                        if hasattr(item, 'text') and item.text:
+                            text = item.text
+                            break
+                elif isinstance(inner, str):
+                    text = inner
+            if text:
+                for url in re.findall(r'https?://[^\s\'"<>]+', text):
                     p = urlparse(url)
-                    if p.netloc and 'facebook' not in p.netloc and 'google' not in p.netloc:
+                    if p.netloc and 'facebook' not in p.netloc and 'google' not in p.netloc and 'anthropic' not in p.netloc:
                         return url
         return None
 
