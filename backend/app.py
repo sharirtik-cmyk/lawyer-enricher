@@ -141,9 +141,17 @@ PRIORITY_KEYWORDS = ['תחומי', 'שירותים', 'practice', 'services',
 def normalize_url(url):
     if not url:
         return None
-    url = url.strip().rstrip('/')
+    url = str(url).strip().rstrip('/')
+    # Reject emails — they look like URLs but aren't
+    if '@' in url and not url.startswith('http'):
+        return None
     if not url.startswith('http'):
         url = 'https://' + url
+    # Reject known bad domains immediately
+    from urllib.parse import urlparse as _up
+    p = _up(url)
+    if any(bad in p.netloc for bad in BAD_DOMAINS):
+        return None
     return url
 
 def fetch_url(url, timeout=12):
@@ -754,7 +762,7 @@ def upload():
         headers = []
         for j, val in enumerate(first_row):
             v = str(val).strip() if val else ''
-            if 'http' in v or '.co.il' in v or '.com' in v:
+            if ('@' not in v) and ('http' in v or '.co.il' in v or '.com' in v):
                 headers.append('אתר בית')
             elif '@' in v:
                 headers.append('אימייל')
@@ -790,7 +798,8 @@ def upload():
             # Also check each cell for URL pattern if no site col found yet
             if 'אתר בית' not in row_data or not row_data.get('אתר בית'):
                 v = str(val).strip() if val else ''
-                if ('http' in v or '.co.il' in v or '.com' in v) and len(v) > 5:
+                # Only pick up URLs, not emails
+                if '@' not in v and ('http' in v or '.co.il' in v or '.com' in v) and len(v) > 5:
                     row_data['אתר בית'] = val
         all_raw.append((i, json.dumps(row_data, ensure_ascii=False, default=str)))
 
