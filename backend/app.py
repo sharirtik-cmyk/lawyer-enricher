@@ -237,6 +237,15 @@ def claude_with_retry(fn, retries=3):
             result = fn()
             if result is not None:
                 return result
+        except TypeError as e:
+            # TypeError usually means bad input to API - log full traceback once
+            import traceback as _tb
+            if attempt == 0:
+                print(f"  [Claude TypeError] {_tb.format_exc()[-300:]}")
+            else:
+                print(f"  [Claude retry {attempt+1}/{retries}] TypeError: {str(e)[:80]}")
+            if attempt < retries - 1:
+                time.sleep(1)
         except Exception as e:
             print(f"  [Claude retry {attempt+1}/{retries}] {str(e)[:100]}")
             if attempt < retries - 1:
