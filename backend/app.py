@@ -156,6 +156,8 @@ def normalize_url(url):
 
 def fetch_url(url, timeout=12):
     """Try https, fall back to http. Returns (final_url, html) or (None, None)."""
+    if not url:
+        return None, None
     attempts = [url]
     if url.startswith('https://'):
         attempts.append(url.replace('https://', 'http://'))
@@ -239,7 +241,7 @@ def claude_with_retry(fn, retries=3):
                 time.sleep(2 ** attempt)
     return None
 
-BAD_DOMAINS = ['google', 'facebook', 'anthropic', 'psakdin', 'din.co.il',
+BAD_DOMAINS = ['google', 'facebook', 'fb.com', 'anthropic', 'psakdin', 'din.co.il',
                'martindale', 'lawtech', 'b144', 'dun', 'linkedin',
                'yad2', 'bizportal', 'mako', 'walla', 'ynet', 'zap.co.il',
                'gov.il', 'court.gov', 'wikipedia', 'instagram', 'twitter']
@@ -287,10 +289,14 @@ def web_search_for_site(lawyer_name, city):
         
         return found_url, all_text if all_text.strip() else None
 
-    result = claude_with_retry(_call)
-    if result is None:
+    try:
+        result = _call()
+        if result is None:
+            return None, None
+        return result
+    except Exception as e:
+        print(f"  [web_search error] {str(e)[:100]}")
         return None, None
-    return result
 
 def web_search_for_facebook(lawyer_name):
     if not lawyer_name:
@@ -509,11 +515,12 @@ def process_row(job_id, row_id, raw_data, config, col_headers):
 
         if site_input:
             url = normalize_url(site_input)
-            final_url, _ = fetch_url(url)
-            if final_url:
-                site_final = final_url
-            else:
-                site_status = "FETCH_FAILED"
+            if url:
+                final_url, _ = fetch_url(url)
+                if final_url:
+                    site_final = final_url
+                else:
+                    site_status = "FETCH_FAILED"
 
         # Always try web search as fallback
         search_snippet = None
