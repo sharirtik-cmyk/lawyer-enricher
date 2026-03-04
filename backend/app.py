@@ -407,7 +407,7 @@ def apply_business_rules(classification, config):
                 return "YES", f"תחום מועדף: {area}"
 
     if not target:
-        return "MAYBE", "לא הוגדרו תחומים מועדפים"
+        return "MAYBE", "סווג בהצלחה"
 
     return "MAYBE", "לא נמצא התאמה לתחומים מועדפים"
 
@@ -497,14 +497,8 @@ def process_row(job_id, row_id, raw_data, config, col_headers):
         # ── Step 6: Business rules ──
         recommendation, reason = apply_business_rules(classification, config)
 
-        # ── Step 7: Facebook ──
-        facebook_found = facebook_input
-        if not facebook_found:
-            fb = web_search_for_facebook(lawyer_name)
-            if fb:
-                facebook_found = fb
-
         # ── Save ──
+        facebook_found = facebook_input
         primary    = classification.get('primary_practice_areas', []) if classification else []
         secondary  = classification.get('secondary_practice_areas', []) if classification else []
         evidence   = classification.get('evidence', [])                 if classification else []
