@@ -700,10 +700,9 @@
               <th>שם בית עסק</th>
               <th>ישוב</th>
               <th>אתר</th>
-              <th>תחומים ראשיים</th>
-              <th>ביטחון</th>
-              <th>המלצה</th>
-              <th>סיבה</th>
+              <th>תחום עיקרי</th>
+              <th>תחום משני 1</th>
+              <th>תחום משני 2</th>
               <th>סטטוס</th>
             </tr>
           </thead>
@@ -990,11 +989,12 @@ function updateProgress(job) {
 
   // Update stats row
   const statsHtml = `
-    <div class="stat-box"><div class="stat-num" style="color:var(--green)">${job.yes_count||0}</div><div class="stat-label">YES</div></div>
-    <div class="stat-box"><div class="stat-num" style="color:var(--red)">${job.no_count||0}</div><div class="stat-label">NO</div></div>
-    <div class="stat-box"><div class="stat-num" style="color:var(--yellow)">${job.maybe_count||0}</div><div class="stat-label">MAYBE</div></div>
-    <div class="stat-box"><div class="stat-num" style="color:var(--muted)">${job.error_count||0}</div><div class="stat-label">שגיאות</div></div>
     <div class="stat-box"><div class="stat-num" style="color:var(--text)">${job.total_rows||0}</div><div class="stat-label">סה"כ</div></div>
+    <div class="stat-box"><div class="stat-num" style="color:var(--green)">${job.yes_count||0}</div><div class="stat-label">YES</div></div>
+    <div class="stat-box"><div class="stat-num" style="color:var(--yellow)">${job.maybe_count||0}</div><div class="stat-label">MAYBE</div></div>
+    <div class="stat-box"><div class="stat-num" style="color:var(--red)">${job.no_count||0}</div><div class="stat-label">NO</div></div>
+    <div class="stat-box" style="border-color:rgba(249,115,22,0.4)"><div class="stat-num" style="color:#f97316">${job.other_count||0}</div><div class="stat-label" style="color:#f97316">⚠ אחר</div></div>
+    <div class="stat-box" style="border-color:rgba(239,68,68,0.4)"><div class="stat-num" style="color:var(--red)">${job.error_count||0}</div><div class="stat-label" style="color:var(--red)">✗ שגיאות</div></div>
   `;
   document.getElementById('stats-row').innerHTML = statsHtml;
 }
@@ -1026,13 +1026,14 @@ function renderTable(rows) {
   }
   tbody.innerHTML = rows.map(r => {
     const raw = r.raw_data || {};
-    const name = raw['שם בית העסק'] || '—';
+    const name = raw['שם עורך דין \\ משרד'] || raw['שם בית העסק'] || raw['שם עורך דין'] || Object.values(raw)[0] || '—';
     const city = raw['ישוב'] || '—';
     const site = r.site_final;
-    const areas = [r.primary_area_1, r.primary_area_2, r.primary_area_3].filter(Boolean);
+    const primary = r.primary_area_1 || '';
+    const secondaries = [r.secondary_area_1, r.secondary_area_2].filter(Boolean);
     const conf = r.confidence || 0;
-    const rec = r.recommendation;
     const confColor = conf >= 70 ? 'var(--green)' : conf >= 40 ? 'var(--yellow)' : 'var(--red)';
+    const primaryColor = primary === 'אחר' ? 'var(--orange, #f97316)' : 'var(--accent)';
 
     let statusBadge;
     if (r.status === 'pending') statusBadge = '<span class="badge badge-pending">ממתין</span>';
@@ -1045,19 +1046,14 @@ function renderTable(rows) {
         <td style="color:var(--muted)">${city}</td>
         <td>${site ? `<a class="site-link" href="${site}" target="_blank" title="${site}">${new URL(site).hostname.replace('www.','')}</a>` : '<span style="color:var(--muted)">—</span>'}</td>
         <td>
-          <div class="area-chips">
-            ${areas.map(a => `<span class="area-chip">${a}</span>`).join('')}
-            ${!areas.length ? '<span style="color:var(--muted)">—</span>' : ''}
-          </div>
+          ${primary ? `<span class="area-chip" style="background:rgba(99,102,241,0.15);color:${primaryColor};border-color:rgba(99,102,241,0.3);font-weight:600">${primary}</span>` : '<span style="color:var(--muted)">—</span>'}
         </td>
         <td>
-          <div class="conf-bar">
-            <div class="conf-fill"><div class="conf-fill-inner" style="width:${conf}%;background:${confColor}"></div></div>
-            <span style="color:${confColor}; font-size:12px; font-family:var(--mono)">${conf}%</span>
-          </div>
+          ${secondaries[0] ? `<span class="area-chip">${secondaries[0]}</span>` : '<span style="color:var(--muted)">—</span>'}
         </td>
-        <td>${rec ? `<span class="badge badge-${rec.toLowerCase()}">${rec}</span>` : statusBadge}</td>
-        <td style="color:var(--muted); font-size:12px; max-width:180px; white-space:normal; line-height:1.4">${r.recommendation_reason || '—'}</td>
+        <td>
+          ${secondaries[1] ? `<span class="area-chip">${secondaries[1]}</span>` : '<span style="color:var(--muted)">—</span>'}
+        </td>
         <td>${r.site_status ? `<span style="font-size:11px; color:var(--muted); font-family:var(--mono)">${r.site_status}</span>` : statusBadge}</td>
       </tr>
     `;

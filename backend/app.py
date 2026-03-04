@@ -38,10 +38,11 @@ anthropic_client = anthropic.Anthropic(api_key=os.environ.get('ANTHROPIC_API_KEY
 # ─────────────────────────────────────────
 
 COLUMN_ALIASES = {
-    'name':     ['שם בית העסק', 'שם עורך דין', 'שם משרד', 'שם'],
-    'site':     ['אתר בית', 'אתר'],
-    'facebook': ['פייסבוק'],
-    'city':     ['ישוב', 'עיר'],
+    'name':     ['שם עורך דין \\ משרד', 'שם בית העסק', 'שם עורך דין', 'שם משרד', 'שם'],
+    'site':     ['אתר בית', 'אתר', 'website', 'url'],
+    'facebook': ['פייסבוק', 'עמוד פייסבוק', 'facebook'],
+    'city':     ['ישוב', 'עיר', 'city'],
+    'category': ['קטגוריה', 'תחום', 'category', 'התמחות'],
 }
 
 def find_column(headers, aliases_key):
@@ -87,6 +88,7 @@ def init_db():
             no_count       INTEGER DEFAULT 0,
             maybe_count    INTEGER DEFAULT 0,
             error_count    INTEGER DEFAULT 0,
+            other_count    INTEGER DEFAULT 0,
             created_at     TEXT,
             completed_at   TEXT,
             config         TEXT,
@@ -372,10 +374,11 @@ PRACTICE_AREAS = [
 ]
 AREAS_LIST_STR = "\n".join(f"{i+1}. {a}" for i, a in enumerate(PRACTICE_AREAS))
 
-def classify_practice_areas(text_corpus, lawyer_name):
+def classify_practice_areas(text_corpus, lawyer_name, category_hint=''):
     if not text_corpus or not text_corpus.strip():
         return None
 
+    hint_line = f"\n\nנתון נוסף מהמאגר: הקטגוריה הרשומה היא '{category_hint}'. השתמש בה כרמז לסיווג." if category_hint else ""
     prompt = f"""You are analyzing the website of an Israeli lawyer or law firm named "{lawyer_name}".
 
 Website content:
@@ -428,7 +431,7 @@ Rules:
 - secondary_practice_areas: 0-2 items maximum — only if clearly present
 - ONLY use exact category names from the numbered list
 - Use "אחר" only if nothing fits
-- confidence: 0-100"""
+- confidence: 0-100{hint_line}"""
     def _call():
         response = anthropic_client.messages.create(
             model="claude-haiku-4-5-20251001",
@@ -543,6 +546,11 @@ def process_row(job_id, row_id, raw_data, config, col_headers):
         site_input     = fields['site']
         facebook_input = fields['facebook']
         city           = fields['city']
+        # Get category hint from source data (e.g. "עורכי דין - דיני משפחה")
+        category_hint  = ''
+        cat_col = find_column(col_headers, 'category')
+        if cat_col and cat_col in data:
+            category_hint = str(data[cat_col] or '').strip()
 
         print(f"  → [{row_id}] {lawyer_name or '(no name)'} | site: {site_input or 'none'}")
 
@@ -600,13 +608,13 @@ def process_row(job_id, row_id, raw_data, config, col_headers):
                 corpus = search_snippet + '\n\n' + corpus
             print(f"    ↳ Crawled {len(pages)} pages, {len(corpus)} chars")
 
-            classification = classify_practice_areas(corpus, lawyer_name)
+            classification = classify_practice_areas(corpus, lawyer_name, category_hint)
             site_status    = site_status or ("CRAWLED" if pages else "NO_CONTENT")
         
         # ── If no site but have search snippet, classify from that ──
         elif not site_final and search_snippet and classification is None:
             print(f"    ↳ Classifying from search snippet ({len(search_snippet)} chars)")
-            classification = classify_practice_areas(search_snippet, lawyer_name)
+            classification = classify_practice_areas(search_snippet, lawyer_name, category_hint)
             if classification:
                 site_status = "CLASSIFIED_FROM_SEARCH"
                 print(f"    ✓ {classification.get('primary_practice_areas')}")
@@ -698,7 +706,7 @@ def run_job(job_id):
 
         print(f"[Job {job_id}] {len(rows)} pending rows | mode={job['mode']} | workers={MAX_WORKERS}")
 
-        yes_c = no_c = maybe_c = err_c = 0
+        yes_c = no_c = maybe_c = err_c = other_c = 0
 
         # FIX: ThreadPoolExecutor with proper exception capture per row
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
@@ -721,11 +729,16 @@ def run_job(job_id):
                     err_c += 1
 
         conn = get_db()
+        # Count 'אחר' classifications
+        other_c = conn.execute(
+            "SELECT COUNT(*) FROM lawyer_rows WHERE job_id=? AND primary_area_1='אחר'",
+            (job_id,)).fetchone()[0]
+
         conn.execute(
             '''UPDATE jobs SET status='completed', completed_at=?,
-               yes_count=?, no_count=?, maybe_count=?, error_count=?
+               yes_count=?, no_count=?, maybe_count=?, error_count=?, other_count=?
                WHERE id=?''',
-            (datetime.now().isoformat(), yes_c, no_c, maybe_c, err_c, job_id))
+            (datetime.now().isoformat(), yes_c, no_c, maybe_c, err_c, other_c, job_id))
         conn.commit()
         conn.close()
         print(f"[Job {job_id}] Complete ✓  YES:{yes_c} NO:{no_c} MAYBE:{maybe_c} ERR:{err_c}")
@@ -964,37 +977,19 @@ def export_job(job_id):
     orig_headers = list(first_raw.keys())
     extra_headers = ['אתר סופי', 'סטטוס אתר',
                      'תחום עיקרי', 'תחום משני 1', 'תחום משני 2',
-                     'ביטחון %',
-                     'המלצה', 'סיבה',
-                     'ראיה 1', 'ראיה 2',
-                     'פייסבוק', 'תאריך בדיקה',
-                     'סטטוס עיבוד', 'שגיאה']
-    extra        = ['site_final', 'site_status',
-                    'primary_area_1', 'secondary_area_1', 'secondary_area_2',
-                    'confidence',
-                    'recommendation', 'recommendation_reason',
-                    'evidence_1', 'evidence_2',
-                    'facebook_found', 'checked_at',
-                    'processing_status', 'error_detail']
+                     'תאריך בדיקה', 'שגיאה']
     ws.append(orig_headers + extra_headers)
 
     for row in rows:
         raw  = json.loads(row['raw_data']) if row['raw_data'] else {}
         vals = [raw.get(h, '') for h in orig_headers] + [
-            row['site_final']            or '',
-            row['site_status']           or '',
-            row['primary_area_1']        or '',
-            row['secondary_area_1']      or '',
-            row['secondary_area_2']      or '',
-            row['confidence']            or '',
-            row['recommendation']        or '',
-            row['recommendation_reason'] or '',
-            row['evidence_1']            or '',
-            row['evidence_2']            or '',
-            row['facebook_found']        or '',
-            row['checked_at']            or '',
-            row['status']                or '',
-            row['error']                 or '',
+            row['site_final']   or '',
+            row['site_status']  or '',
+            row['primary_area_1']   or '',
+            row['secondary_area_1'] or '',
+            row['secondary_area_2'] or '',
+            row['checked_at']   or '',
+            row['error']        or '',
         ]
         ws.append(vals)
 
