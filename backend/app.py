@@ -663,7 +663,34 @@ def upload():
 
     wb      = openpyxl.load_workbook(path)
     ws      = wb.active
-    headers = [str(c.value) if c.value is not None else '' for c in ws[1]]
+    first_row = [str(c.value) if c.value is not None else '' for c in ws[1]]
+
+    # Auto-detect if first row is a header or data
+    # If the first cell looks like a name (not a known column label), treat as data
+    KNOWN_HEADERS = ['שם', 'name', 'עורך', 'משרד', 'טלפון', 'אימייל', 'email', 'אתר', 'site', 'עיר', 'ישוב', 'city']
+    first_cell = first_row[0].strip().lower() if first_row else ''
+    has_header = any(kw in first_cell for kw in KNOWN_HEADERS)
+
+    if has_header:
+        headers  = first_row
+        data_start = 2
+    else:
+        # No header row — assign positional column names based on content sniffing
+        # Detect which column has URLs and which has names
+        headers = []
+        for j, val in enumerate(first_row):
+            v = str(val).strip() if val else ''
+            if 'http' in v or '.co.il' in v or '.com' in v:
+                headers.append('אתר בית')
+            elif '@' in v:
+                headers.append('אימייל')
+            elif v.replace('-','').replace('+','').replace(' ','').isdigit() and len(v) > 5:
+                headers.append('טלפון')
+            elif j == 0:
+                headers.append('שם עורך דין')
+            else:
+                headers.append(f'col_{j}')
+        data_start = 1
 
     conn = get_db()
     c    = conn.cursor()
@@ -676,10 +703,21 @@ def upload():
 
     # Parse all rows
     all_raw = []
-    for i, row in enumerate(ws.iter_rows(min_row=2, values_only=True)):
+    for i, row in enumerate(ws.iter_rows(min_row=data_start, values_only=True)):
         if not any(v for v in row if v is not None):
             continue
-        row_data = {headers[j]: row[j] for j in range(min(len(headers), len(row)))}
+        row_data = {}
+        for j in range(min(len(headers), len(row))):
+            key = headers[j]
+            val = row[j]
+            # If multiple cols mapped to same name, keep first non-empty
+            if key not in row_data or (row_data[key] in (None, '')):
+                row_data[key] = val
+            # Also check each cell for URL pattern if no site col found yet
+            if 'אתר בית' not in row_data or not row_data.get('אתר בית'):
+                v = str(val).strip() if val else ''
+                if ('http' in v or '.co.il' in v or '.com' in v) and len(v) > 5:
+                    row_data['אתר בית'] = val
         all_raw.append((i, json.dumps(row_data, ensure_ascii=False, default=str)))
 
     # Determine which rows are 'pending' vs 'skipped' based on mode
@@ -687,15 +725,17 @@ def upload():
 
     if mode in SAMPLE_LIMITS:
         limit    = SAMPLE_LIMITS[mode]
-        site_col = find_column(headers, 'site')
-
         with_site    = []
         without_site = []
         for i, rd in all_raw:
-            has_site = bool(
-                site_col and str(json.loads(rd).get(site_col, '') or '').strip()
-            )
-            (with_site if has_site else without_site).append((i, rd))
+            row_obj  = json.loads(rd)
+            site_val = ''
+            for v in row_obj.values():
+                s = str(v or '').strip()
+                if 'http' in s or '.co.il' in s or '.com' in s:
+                    site_val = s
+                    break
+            (with_site if site_val else without_site).append((i, rd))
 
         # Smart sample: prefer rows with site, pad with rows without if needed
         chosen = with_site[:limit]
