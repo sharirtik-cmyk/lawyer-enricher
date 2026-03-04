@@ -239,7 +239,7 @@ def web_search_for_site(lawyer_name, city):
 
     def _call():
         response = anthropic_client.messages.create(
-            model="claude-sonnet-4-6",
+            model="claude-sonnet-4-5-20251022",
             max_tokens=500,
             tools=[{"type": "web_search_20250305", "name": "web_search"}],
             messages=[{"role": "user", "content":
@@ -262,7 +262,7 @@ def web_search_for_facebook(lawyer_name):
 
     def _call():
         response = anthropic_client.messages.create(
-            model="claude-sonnet-4-6",
+            model="claude-sonnet-4-5-20251022",
             max_tokens=300,
             tools=[{"type": "web_search_20250305", "name": "web_search"}],
             messages=[{"role": "user", "content":
@@ -304,7 +304,7 @@ Rules:
 
     def _call():
         response = anthropic_client.messages.create(
-            model="claude-sonnet-4-6",
+            model="claude-sonnet-4-5-20251022",
             max_tokens=800,
             messages=[{"role": "user", "content": prompt}]
         )
