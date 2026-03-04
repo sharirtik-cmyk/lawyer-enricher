@@ -231,42 +231,58 @@ def claude_with_retry(fn, retries=3):
                 time.sleep(2 ** attempt)
     return None
 
+BAD_DOMAINS = ['google', 'facebook', 'anthropic', 'psakdin', 'din.co.il',
+               'martindale', 'lawtech', 'b144', 'dun', 'linkedin',
+               'yad2', 'bizportal', 'mako', 'walla', 'ynet', 'zap.co.il',
+               'gov.il', 'court.gov', 'wikipedia', 'instagram', 'twitter']
+
+def extract_all_text_from_response(response):
+    """Extract all text content from an Anthropic API response including tool results."""
+    texts = []
+    for block in response.content:
+        if hasattr(block, 'text') and block.text:
+            texts.append(block.text)
+        elif hasattr(block, 'content'):
+            inner = block.content
+            if isinstance(inner, list):
+                for item in inner:
+                    if hasattr(item, 'text') and item.text:
+                        texts.append(item.text)
+            elif isinstance(inner, str):
+                texts.append(inner)
+    return '\n'.join(texts)
+
 def web_search_for_site(lawyer_name, city):
+    """Search Google for the lawyer and return both a URL and search snippet text."""
     if not lawyer_name:
-        return None
-    query = f"{lawyer_name} עורך דין {city}"
+        return None, None
+    query = f"{lawyer_name} עורך דין {city or ''}"
 
     def _call():
         response = anthropic_client.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=500,
+            max_tokens=1000,
             tools=[{"type": "web_search_20250305", "name": "web_search"}],
             messages=[{"role": "user", "content":
-                f"Find the official website URL for this Israeli lawyer/law firm: {query}. "
-                f"Return ONLY the URL, nothing else."}]
+                f"Search for this Israeli lawyer: {query}. "
+                f"Return their official website URL and a brief description of their practice areas based on search results."}]
         )
-        for block in response.content:
-            text = None
-            if hasattr(block, 'text') and block.text:
-                text = block.text
-            elif hasattr(block, 'content'):
-                # tool_result block
-                inner = block.content
-                if isinstance(inner, list):
-                    for item in inner:
-                        if hasattr(item, 'text') and item.text:
-                            text = item.text
-                            break
-                elif isinstance(inner, str):
-                    text = inner
-            if text:
-                for url in re.findall(r'https?://[^\s\'"<>]+', text):
-                    p = urlparse(url)
-                    if p.netloc and 'facebook' not in p.netloc and 'google' not in p.netloc and 'anthropic' not in p.netloc:
-                        return url
-        return None
+        all_text = extract_all_text_from_response(response)
+        
+        # Extract best URL
+        found_url = None
+        for url in re.findall(r'https?://[^\s\'"<>]+', all_text):
+            p = urlparse(url)
+            if p.netloc and not any(bad in p.netloc for bad in BAD_DOMAINS):
+                found_url = url
+                break
+        
+        return found_url, all_text if all_text.strip() else None
 
-    return claude_with_retry(_call)
+    result = claude_with_retry(_call)
+    if result is None:
+        return None, None
+    return result
 
 def web_search_for_facebook(lawyer_name):
     if not lawyer_name:
@@ -428,6 +444,45 @@ def apply_business_rules(classification, config):
 # Core row processor
 # ─────────────────────────────────────────
 
+def classify_from_name(lawyer_name):
+    """Extract practice areas from the lawyer's name/title when no site is available."""
+    prompt = f"""An Israeli lawyer is listed with this name/title: "{lawyer_name}"
+
+Sometimes Israeli lawyer names include their practice areas (e.g. "עו"ד גלינה פסחוב - תעבורה, פלילי, מנהלי").
+
+Choose their practice areas ONLY from this fixed list:
+{AREAS_LIST_STR}
+
+If you can identify practice areas from the name/title, return JSON:
+{{
+  "primary_practice_areas": ["exact name from list"],
+  "secondary_practice_areas": [],
+  "confidence": 60,
+  "evidence": ["extracted from name: {lawyer_name}"]
+}}
+
+If the name gives NO information about practice areas, return null (nothing).
+Return ONLY valid JSON or the word null."""
+
+    def _call():
+        response = anthropic_client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=300,
+            messages=[{{"role": "user", "content": prompt}}]
+        )
+        text = response.content[0].text.strip()
+        if text.lower() == 'null' or not text or '{{' not in text:
+            return None
+        match = re.search(r'\{{.*\}}', text, re.DOTALL)
+        if match:
+            result = json.loads(match.group())
+            if result.get('primary_practice_areas'):
+                return result
+        return None
+
+    return claude_with_retry(_call)
+
+
 def process_row(job_id, row_id, raw_data, config, col_headers):
     conn = get_db()
     try:
@@ -452,11 +507,12 @@ def process_row(job_id, row_id, raw_data, config, col_headers):
             else:
                 site_status = "FETCH_FAILED"
 
-        # FIX: Always try web search as fallback (even if site_input existed but failed)
+        # Always try web search as fallback
+        search_snippet = None
         if not site_final:
-            found = web_search_for_site(lawyer_name, city)
-            if found:
-                final_url, _ = fetch_url(found)
+            found_url, search_snippet = web_search_for_site(lawyer_name, city)
+            if found_url:
+                final_url, _ = fetch_url(found_url)
                 if final_url:
                     site_final  = final_url
                     site_status = "FOUND_VIA_SEARCH"
@@ -465,6 +521,11 @@ def process_row(job_id, row_id, raw_data, config, col_headers):
 
         if not site_final:
             site_status = "NO_SITE"
+
+        # ── Step 2b: Classify from name if no site found ──
+        name_classification = None
+        if not site_final and lawyer_name and lawyer_name.strip():
+            name_classification = classify_from_name(lawyer_name)
 
         # ── Step 3: Cache check ──
         classification = None
@@ -483,10 +544,20 @@ def process_row(job_id, row_id, raw_data, config, col_headers):
         if site_final and classification is None:
             pages  = crawl_site(site_final)
             corpus = '\n\n'.join(text for _, text in pages)
+            # Also append search snippet to corpus for better classification
+            if search_snippet:
+                corpus = search_snippet + '\n\n' + corpus
             print(f"    ↳ Crawled {len(pages)} pages, {len(corpus)} chars")
 
             classification = classify_practice_areas(corpus, lawyer_name)
             site_status    = site_status or ("CRAWLED" if pages else "NO_CONTENT")
+        
+        # ── If no site but have search snippet, classify from that ──
+        elif not site_final and search_snippet and classification is None:
+            print(f"    ↳ Classifying from search snippet ({len(search_snippet)} chars)")
+            classification = classify_practice_areas(search_snippet, lawyer_name)
+            if classification:
+                site_status = "CLASSIFIED_FROM_SEARCH"
 
             if classification:
                 print(f"    ✓ {classification.get('primary_practice_areas')}")
@@ -508,6 +579,9 @@ def process_row(job_id, row_id, raw_data, config, col_headers):
             conn.commit()
 
         # ── Step 6: Business rules ──
+        # Use name-based classification as fallback
+        if not classification and name_classification:
+            classification = name_classification
         recommendation, reason = apply_business_rules(classification, config)
 
         # ── Save ──
