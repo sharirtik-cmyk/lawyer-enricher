@@ -277,17 +277,36 @@ def web_search_for_site(lawyer_name, city):
                 f"Search for this Israeli lawyer: {query}. "
                 f"Return their official website URL and a brief description of their practice areas based on search results."}]
         )
-        all_text = extract_all_text_from_response(response)
-        
-        # Extract best URL
+        # Extract only clean text blocks (not tool_use blocks which contain dicts)
+        clean_texts = []
         found_url = None
-        for url in re.findall(r'https?://[^\s\'"<>]+', all_text):
-            p = urlparse(url)
-            if p.netloc and not any(bad in p.netloc for bad in BAD_DOMAINS):
-                found_url = url
-                break
+        for block in response.content:
+            # Get text from text blocks
+            if hasattr(block, 'type') and block.type == 'text' and hasattr(block, 'text'):
+                clean_texts.append(block.text)
+                # Extract URL from text
+                if not found_url:
+                    for url in re.findall(r'https?://[^\s\'"<>]+', block.text):
+                        p = urlparse(url)
+                        if p.netloc and not any(bad in p.netloc for bad in BAD_DOMAINS):
+                            found_url = url
+                            break
+            # Get text from tool_result content (search results)
+            elif hasattr(block, 'type') and block.type == 'tool_result':
+                inner = block.content if hasattr(block, 'content') else None
+                if isinstance(inner, list):
+                    for item in inner:
+                        if hasattr(item, 'type') and item.type == 'text' and hasattr(item, 'text'):
+                            clean_texts.append(item.text)
+                            if not found_url:
+                                for url in re.findall(r'https?://[^\s\'"<>]+', item.text):
+                                    p = urlparse(url)
+                                    if p.netloc and not any(bad in p.netloc for bad in BAD_DOMAINS):
+                                        found_url = url
+                                        break
         
-        return found_url, all_text if all_text.strip() else None
+        snippet = '\n'.join(clean_texts).strip()
+        return found_url, snippet if snippet else None
 
     try:
         result = _call()
