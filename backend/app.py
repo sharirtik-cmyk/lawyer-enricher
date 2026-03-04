@@ -100,9 +100,8 @@ def init_db():
             site_final            TEXT,
             site_status           TEXT,
             primary_area_1        TEXT,
-            primary_area_2        TEXT,
-            primary_area_3        TEXT,
-            secondary_areas       TEXT,
+            secondary_area_1      TEXT,
+            secondary_area_2      TEXT,
             confidence            INTEGER,
             recommendation        TEXT,
             recommendation_reason TEXT,
@@ -278,6 +277,39 @@ def web_search_for_facebook(lawyer_name):
 
     return claude_with_retry(_call)
 
+PRACTICE_AREAS = [
+    "משפט אזרחי",
+    "משפט מסחרי / דיני חברות",
+    "דיני חוזים",
+    "דיני נזיקין",
+    "דיני בנקאות",
+    "דיני מקרקעין (נדל\"ן)",
+    "תכנון ובנייה",
+    "משפט פלילי",
+    "משפט מנהלי",
+    "משפט חוקתי",
+    "דיני עבודה",
+    "דיני משפחה",
+    "דיני ירושה וצוואות",
+    "קניין רוחני",
+    "דיני מיסים",
+    "חדלות פירעון (פשיטת רגל ושיקום כלכלי)",
+    "דיני תחרות (הגבלים עסקיים)",
+    "משפט בינלאומי פרטי",
+    "משפט בינלאומי פומבי",
+    "משפט ימי",
+    "משפט צבאי",
+    "דיני הגירה ואזרחות",
+    "דיני איכות הסביבה",
+    "דיני תקשורת ומדיה",
+    "דיני פרטיות והגנת מידע",
+    "דיני מכרזים",
+    "דיני ספורט",
+    "דיני צרכנות",
+    "אחר",
+]
+AREAS_LIST_STR = "\n".join(f"{i+1}. {a}" for i, a in enumerate(PRACTICE_AREAS))
+
 def classify_practice_areas(text_corpus, lawyer_name):
     if not text_corpus or not text_corpus.strip():
         return None
@@ -285,23 +317,56 @@ def classify_practice_areas(text_corpus, lawyer_name):
     prompt = f"""You are analyzing the website of an Israeli lawyer or law firm named "{lawyer_name}".
 
 Website content:
-{text_corpus[:6000]}
+{text_corpus[:5000]}
 
-Identify their legal practice areas. Return ONLY valid JSON:
+Classify this lawyer using ONLY the following 29 practice area categories (plus "אחר"):
+{AREAS_LIST_STR}
+
+Sub-areas that belong to each category (use these to help identify the right category):
+- משפט אזרחי: סדר דין אזרחי, תביעות, סעדים זמניים, עיקולים, צווי מניעה, התיישנות
+- משפט מסחרי / דיני חברות: ייסוד חברות, ממשל תאגידי, סכסוכי בעלי מניות, מיזוגים ורכישות, שותפויות
+- דיני חוזים: חוזים, הפרת חוזים, פרשנות חוזים
+- דיני נזיקין: רשלנות, רשלנות רפואית, תאונות דרכים, תאונות עבודה, ביטוח לאומי, לשון הרע, ביטוח
+- דיני בנקאות: סכסוכי לקוח-בנק, הלוואות, ערבויות, משכנתאות, שטרות
+- דיני מקרקעין (נדל"ן): עסקאות מכר, שכירות, בתים משותפים, התחדשות עירונית, תמ"א 38, ליקויי בנייה
+- תכנון ובנייה: היתרי בנייה, התנגדויות, עבירות תכנוניות, היטל השבחה
+- משפט פלילי: עבירות רכוש, אלימות, סמים, מרמה, עבירות כלכליות, הלבנת הון, העלמות מס
+- משפט מנהלי: עתירות מנהליות, תקיפת החלטות רשות, רישוי, ביקורת שיפוטית
+- משפט חוקתי: זכויות יסוד, עתירות לבג"ץ, ביקורת שיפוטית על חקיקה
+- דיני עבודה: פיטורים, זכויות סוציאליות, אפליה בעבודה, הטרדה מינית, הסכמים קיבוציים
+- דיני משפחה: גירושין, מזונות, משמורת, חלוקת רכוש, הסכמי ממון, ידועים בציבור
+- דיני ירושה וצוואות: צוואות, ירושה, צו ירושה, סכסוכי יורשים, אפוטרופסות, ייפוי כוח מתמשך
+- קניין רוחני: זכויות יוצרים, סימני מסחר, פטנטים, סודות מסחריים
+- דיני מיסים: מס הכנסה, מע"מ, מיסוי מקרקעין, השגות מס, קריפטו, גילוי מרצון
+- חדלות פירעון: פשיטת רגל, הסדרי חוב, הוצאה לפועל, גביה, הגנה מפני נושים
+- דיני תחרות: הגבלים עסקיים, מונופולין, הסדרים כובלים, תביעות נגזרות
+- משפט בינלאומי פרטי: סמכות שיפוט בינלאומית, הכרה בפסקי דין זרים
+- משפט בינלאומי פומבי: דיני אמנות, אחריות מדינתית, דיני לחימה
+- משפט ימי: הובלה ימית, מטען, כלי שיט, תאונות ימיות
+- משפט צבאי: דין משמעתי, בתי דין צבאיים, זכויות חיילים
+- דיני הגירה ואזרחות: אשרות, מעמד, התאזרחות, איחוד משפחות, דרכון ישראלי
+- דיני איכות הסביבה: רגולציה סביבתית, מפגעים, אחריות סביבתית
+- דיני תקשורת ומדיה: רגולציית שידורים, דיני אינטרנט, נגישות אתרים
+- דיני פרטיות והגנת מידע: חוק הגנת הפרטיות, מאגרי מידע, אבטחת מידע
+- דיני מכרזים: מכרזים ציבוריים, השגות מכרזים, פסילת הצעות
+- דיני ספורט: חוזי שחקנים, מוסדות שיפוט בספורט, משמעת בספורט
+- דיני צרכנות: הטעיה, ביטול עסקה, תביעות ייצוגיות, אחריות לצרכן
+- אחר: כל תחום שאינו נופל באף קטגוריה לעיל
+
+Return ONLY valid JSON, no explanation:
 {{
-  "primary_practice_areas": ["area1", "area2"],
-  "secondary_practice_areas": ["area3", "area4"],
+  "primary_practice_areas": ["exact name from list"],
+  "secondary_practice_areas": ["exact name from list"],
   "confidence": 75,
-  "evidence": ["snippet1", "snippet2"]
+  "evidence": ["short Hebrew snippet from the text"]
 }}
 
 Rules:
-- primary_practice_areas: max 3 items (main focus)
-- secondary_practice_areas: max 5 items (mentioned but secondary)
-- confidence: 0-100
-- evidence: 2-3 short snippets from the actual text
-- Use Hebrew names: נדל״ן, משפחה, פלילי, עבודה, מסחרי, נזיקין, ירושה, הגירה, מקרקעין, תאגידים, תעבורה, etc."""
-
+- primary_practice_areas: exactly 1 item — the single most dominant area on the site
+- secondary_practice_areas: 0-2 items maximum — only if clearly present
+- ONLY use exact category names from the numbered list
+- Use "אחר" only if nothing fits
+- confidence: 0-100"""
     def _call():
         response = anthropic_client.messages.create(
             model="claude-sonnet-4-5-20251022",
@@ -312,7 +377,7 @@ Rules:
         match = re.search(r'\{.*\}', text, re.DOTALL)
         if match:
             result = json.loads(match.group())
-            if result.get('primary_practice_areas'):  # must have real content
+            if result.get('primary_practice_areas'):
                 return result
         return None
 
@@ -321,7 +386,6 @@ Rules:
 # ─────────────────────────────────────────
 # Business rules
 # ─────────────────────────────────────────
-
 def apply_business_rules(classification, config):
     if not classification or not classification.get('primary_practice_areas'):
         return "MAYBE", "לא ניתן לסווג — לא נמצא תוכן אתר"
@@ -449,18 +513,18 @@ def process_row(job_id, row_id, raw_data, config, col_headers):
         conn.execute('''
             UPDATE lawyer_rows SET
               site_final=?, site_status=?,
-              primary_area_1=?, primary_area_2=?, primary_area_3=?,
-              secondary_areas=?, confidence=?,
+              primary_area_1=?, secondary_area_1=?, secondary_area_2=?,
+              confidence=?,
               recommendation=?, recommendation_reason=?,
               evidence_1=?, evidence_2=?,
               facebook_found=?, checked_at=?,
               status='done', error=NULL
             WHERE id=?''', (
             site_final, site_status,
-            primary[0]  if len(primary) > 0 else None,
-            primary[1]  if len(primary) > 1 else None,
-            primary[2]  if len(primary) > 2 else None,
-            ', '.join(secondary), confidence,
+            primary[0]    if len(primary) > 0 else None,
+            secondary[0]  if len(secondary) > 0 else None,
+            secondary[1]  if len(secondary) > 1 else None,
+            confidence,
             recommendation, reason,
             evidence[0] if len(evidence) > 0 else None,
             evidence[1] if len(evidence) > 1 else None,
@@ -741,14 +805,21 @@ def export_job(job_id):
 
     first_raw    = json.loads(rows[0]['raw_data'])
     orig_headers = list(first_raw.keys())
+    extra_headers = ['אתר סופי', 'סטטוס אתר',
+                     'תחום עיקרי', 'תחום משני 1', 'תחום משני 2',
+                     'ביטחון %',
+                     'המלצה', 'סיבה',
+                     'ראיה 1', 'ראיה 2',
+                     'פייסבוק', 'תאריך בדיקה',
+                     'סטטוס עיבוד', 'שגיאה']
     extra        = ['site_final', 'site_status',
-                    'primary_area_1', 'primary_area_2', 'primary_area_3',
-                    'secondary_areas', 'confidence',
+                    'primary_area_1', 'secondary_area_1', 'secondary_area_2',
+                    'confidence',
                     'recommendation', 'recommendation_reason',
                     'evidence_1', 'evidence_2',
                     'facebook_found', 'checked_at',
                     'processing_status', 'error_detail']
-    ws.append(orig_headers + extra)
+    ws.append(orig_headers + extra_headers)
 
     for row in rows:
         raw  = json.loads(row['raw_data']) if row['raw_data'] else {}
@@ -756,9 +827,8 @@ def export_job(job_id):
             row['site_final']            or '',
             row['site_status']           or '',
             row['primary_area_1']        or '',
-            row['primary_area_2']        or '',
-            row['primary_area_3']        or '',
-            row['secondary_areas']       or '',
+            row['secondary_area_1']      or '',
+            row['secondary_area_2']      or '',
             row['confidence']            or '',
             row['recommendation']        or '',
             row['recommendation_reason'] or '',
