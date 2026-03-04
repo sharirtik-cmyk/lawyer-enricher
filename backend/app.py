@@ -566,25 +566,9 @@ def process_row(job_id, row_id, raw_data, config, col_headers):
             classification = classify_practice_areas(search_snippet, lawyer_name)
             if classification:
                 site_status = "CLASSIFIED_FROM_SEARCH"
-
-            if classification:
                 print(f"    ✓ {classification.get('primary_practice_areas')}")
             else:
                 print(f"    ✗ Classification empty")
-
-            # FIX: only cache if we got real results
-            crawl_ok = bool(pages and classification)
-            conn.execute(
-                '''INSERT OR REPLACE INTO site_cache
-                   (url, site_final, classification, crawl_success, content_hash, last_checked)
-                   VALUES (?,?,?,?,?,?)''',
-                (site_final, site_final,
-                 json.dumps(classification) if classification else None,
-                 1 if crawl_ok else 0,
-                 hashlib.md5(corpus.encode()).hexdigest(),
-                 datetime.now().isoformat())
-            )
-            conn.commit()
 
         # ── Step 6: Business rules ──
         # Use name-based classification as fallback
